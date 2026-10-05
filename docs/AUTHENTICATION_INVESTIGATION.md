@@ -35,6 +35,9 @@ unchanged with collection disabled. Credentials and raw traffic are never export
   Endpoint aliases identify validated public host/path differences; URL queries
   are excluded. Reports contain no URL, Apple ID, password, code, token, cookies,
   SAP exchange, signatures, raw bodies or arbitrary response headers/messages.
+- transport-code is a numeric URLError code, not its potentially sensitive
+  description. It separates timeouts, lost connections and cancellation from HTTP.
+- signature-bytes counts the Base64 header bytes; no signature value is exported.
 - signer-ms versus transfer-ms separates local interpretation cost from network
   wait. bag-ms/sap-ms show the setup avoided by a warm trial.
 - cookie-jar-count and request-cookie-count describe matching jar entries, not

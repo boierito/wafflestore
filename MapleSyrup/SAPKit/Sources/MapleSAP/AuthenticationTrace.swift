@@ -24,6 +24,9 @@ public struct AuthenticationTrace {
         }
         switch key {
         case "build", "trial", "preparation", "endpoint-alias", "signer-ms", "transfer-ms", "sap-ms", "bag-ms", "task-ms": return number(10_000_000)
+        case "transport-code":
+            let digits = value.hasPrefix("-") ? String(value.dropFirst()) : value
+            return !digits.isEmpty && digits.count <= 5 && digits.allSatisfy { $0.isASCII && $0.isNumber } && (Int(digits).map { $0 <= 10_000 } ?? false)
         case "HTTP": return number(599)
         case "attempt": return number(12)
         case "signature-bytes": return number(1 << 20)

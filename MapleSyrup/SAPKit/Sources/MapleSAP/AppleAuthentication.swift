@@ -207,6 +207,9 @@ public struct AppleAuthentication {
                 await progress(.retrying)
                 try await sleep(delay)
             } catch let error as URLError {
+                let transferMS = min(10_000_000, max(0, Int((ProcessInfo.processInfo.systemUptime - transferStart) * 1000)))
+                await diagnostic("transfer-ms=\(transferMS); transport-code=\(error.code.rawValue)")
+                await diagnostic(await transport.transferDiagnostic())
                 if error.code == .cancelled || Task.isCancelled { throw CancellationError() }
                 guard [.timedOut, .networkConnectionLost, .cannotConnectToHost].contains(error.code), attempt < recoveryAttempts else {
                     throw AuthenticationError.network(error.code.rawValue)
