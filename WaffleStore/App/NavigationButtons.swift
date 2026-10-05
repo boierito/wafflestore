@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PartyUI
+import MapleSAP
 
 struct NavigationButtons: View {
     @EnvironmentObject var appData: AppData
@@ -24,7 +25,7 @@ struct NavigationButtons: View {
                     } else if appData.hasSent2FACode {
                         ButtonLabel(text: "Log In".localized, icon: "arrow.right")
                     } else {
-                        ButtonLabel(text: "Send 2FA Code".localized, icon: "key")
+                        ButtonLabel(text: "Sign in", icon: "key")
                     }
                 }
                 .buttonStyle(FancyButtonStyle())
@@ -32,61 +33,19 @@ struct NavigationButtons: View {
                 .disabled(appData.hasSent2FACode ? appData.code.isEmpty : false)
             } else {
                 if appData.isDowngrading {
-                    Button(action: {
-                        Haptic.shared.play(.soft)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-#if canImport(UIKit)
-    if let url = URL(string: "wafflestore://open") {
-        UIApplication.shared.open(url, options: [:], completionHandler: nil)
-    } else if let appStoreURL = URL(string: "itms-apps://itunes.apple.com/app/id") {
-        UIApplication.shared.open(appStoreURL, options: [:], completionHandler: nil)
-    }
-#endif
-                        }
-                    }) {
-                        ButtonLabel(text: "Open App".localized, icon: "arrow.up.forward.app")
-                    }
-                    .buttonStyle(FancyButtonStyle(color: .blue))
-                    .disabled(!appData.hasAppBeenServed)
-                    
-                    Button(action: {
-                        Haptic.shared.play(.heavy)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            exitinator()
-                        }
-                    }) {
-                        ButtonLabel(text: "Go to Home Screen".localized, icon: "house")
-                    }
-                    .buttonStyle(FancyButtonStyle())
-                    .disabled(!appData.hasAppBeenServed)
+                    Button("Cancel download") { appData.storeTask?.cancel() }
+                        .buttonStyle(FancyButtonStyle())
                 } else {
-                    Button(action: {
-                        Haptic.shared.play(.soft)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            if appData.appLink.isEmpty {
-                                return
-                            }
-                            var appLinkParsed = appData.appLink
-                            appLinkParsed = appLinkParsed.components(separatedBy: "id").last ?? ""
-                            for char in appLinkParsed {
-                                if !char.isNumber {
-                                    appLinkParsed = String(appLinkParsed.prefix(upTo: appLinkParsed.firstIndex(of: char)!))
-                                    break
-                                }
-                            }
-                            print("App ID: \(appLinkParsed)")
-                            appData.isDowngrading = true
-                            appData.hasAppBeenServed = false
-                            downgradeApp(appId: appLinkParsed, ipaTool: appData.ipaTool!)
-                        }
-                    }) {
-                        ButtonLabel(text: "Downgrade App".localized, icon: "square.and.arrow.down")
+                    Button(action: { appData.showStoreVersions = true }) {
+                        ButtonLabel(text: "Choose version / download IPA", icon: "square.and.arrow.down")
                     }
                     .buttonStyle(FancyButtonStyle())
-                    .disabled(appData.appLink.isEmpty || !appData.storeDownloadsAvailable)
-                    
+                    .disabled(appData.appLink.isEmpty)
+                    if let url = appData.downloadedIPAURL {
+                        ShareLink(item: url) { Label("Export IPA", systemImage: "square.and.arrow.up") }
+                    }
                     let currentAppId = extractAppId(from: appData.appLink)
-                    let existingFav = appData.favourites.first { extractAppId(from: $0.appLink) == currentAppId }
+                    let existingFav = appData.favourites.first { currentAppId.isEmpty ? $0.appLink == appData.appLink : extractAppId(from: $0.appLink) == currentAppId }
                     let isFavourited = existingFav != nil
 
                     Button(action: {
@@ -135,43 +94,19 @@ struct NavigationButtons: View {
 }
 
 func extractAppId(from link: String) -> String {
-    var parsed = link.components(separatedBy: "id").last ?? ""
-    for char in parsed {
-        if !char.isNumber {
-            if let index = parsed.firstIndex(of: char) {
-                parsed = String(parsed.prefix(upTo: index))
-            }
-            break
-        }
-    }
-    return parsed
+    let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let id = StoreParsing.identifier(trimmed) { return id }
+    guard let url = URL(string: trimmed), url.scheme == "https",
+          ["apps.apple.com", "itunes.apple.com"].contains(url.host?.lowercased() ?? "") else { return "" }
+    return url.pathComponents.compactMap { $0.hasPrefix("id") ? StoreParsing.identifier(String($0.dropFirst(2))) : nil }.last ?? ""
 }
 
 func fetchAppNameAndBundleId(forLink: String, completion: @escaping (String, String) -> Void) {
-    let parsedAppId = extractAppId(from: forLink)
-    guard !parsedAppId.isEmpty, let url = URL(string: "https://itunes.apple.com/lookup?id=\(parsedAppId)") else {
-        completion("", "")
-        return
-    }
-    
-    URLSession.shared.dataTask(with: url) { data, response, error in
-        guard let data = data, error == nil else {
-            completion("", "")
-            return
-        }
+    guard let tool = AppData.shared.ipaTool else { completion("", ""); return }
+    Task {
         do {
-            if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-               let results = json["results"] as? [[String: Any]],
-               let firstResult = results.first {
-                let trackName = firstResult["trackName"] as? String ?? ""
-                let bundleId = firstResult["bundleId"] as? String ?? ""
-                completion(trackName, bundleId)
-            } else {
-                completion("", "")
-            }
-        } catch {
-            completion("", "")
-        }
-    }.resume()
+            let app = try await tool.lookup(forLink)
+            completion(app.name, app.bundleID)
+        } catch { completion("", "") }
+    }
 }
-

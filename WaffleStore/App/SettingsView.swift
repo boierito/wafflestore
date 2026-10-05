@@ -52,6 +52,9 @@ struct SettingsView: View {
                     ShareLink(item: appData.authenticationDiagnostic) {
                         Label("Export authentication diagnostic", systemImage: "square.and.arrow.up")
                     }
+                    ShareLink(item: appData.storeDiagnostic) {
+                        Label("Export Store/download diagnostic", systemImage: "square.and.arrow.up")
+                    }
                     Toggle(isOn: $autoCleanApp) {
                         Text("Auto-Clean App".localized)
                         Text("Auto-Clean Description".localized)
@@ -76,12 +79,24 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                 }
                 
+                if !appData.completedDownloads.isEmpty {
+                    Section("Downloaded IPAs") {
+                        ForEach(appData.completedDownloads) { record in
+                            if let url = record.fileURL {
+                                ShareLink(item: url) {
+                                    VStack(alignment: .leading) {
+                                        Text("\(record.appName) — \(record.version)")
+                                        Text("externalVersionId \(record.externalVersionID)").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 Section(header: HeaderLabel(text: "Data".localized, icon: "loupe"), footer: Text("Storage Warning".localized)) {
                     VStack {
                         Button(action: {
-                            let tempDir = FileManager.default.temporaryDirectory
-                            let tempIPAURL = tempDir.appendingPathComponent("app.ipa")
-                            presentShareSheet(with: tempIPAURL)
+                            if let url = appData.downloadedIPAURL { presentShareSheet(with: url) }
                         }) {
                             ButtonLabel(text: "Export IPA".localized, icon: "arrow.up.doc")
                         }

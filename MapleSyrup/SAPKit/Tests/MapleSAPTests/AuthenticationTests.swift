@@ -60,6 +60,19 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(signer.bodies, requests.map { $0.httpBody! })
     }
 
+    func testBareDocumentPairsAuthenticateOnlyWithCompleteSession() async throws {
+        let xml = "<Document><Protocol><key>dsPersonId</key><string>123456789</string><key>passwordToken</key><string>fixture-token</string></Protocol></Document>"
+        guard case .authenticated = try await login(FixtureAuthenticationTransport([.http(200, Data(xml.utf8), responseHeaders)])) else {
+            return XCTFail("Document pairs not parsed")
+        }
+        let incomplete = Data("<Document><key>dsPersonId</key><string>123456789</string></Document>".utf8)
+        let store = FixtureAccountStore()
+        do { _ = try await login(FixtureAuthenticationTransport([.http(200, incomplete, responseHeaders)]), store: store); XCTFail("Incomplete session saved") }
+        catch { XCTAssertEqual(error as? AuthenticationError, .invalidResponse(200)) }
+        XCTAssertNil(try store.load())
+        XCTAssertThrowsError(try ApplePlist.dictionary(Data("<html><key>dsPersonId</key><string>123456789</string></html>".utf8)))
+    }
+
     func testCredentialRedirectsRejectUntrustedDestinationsAnd303() async throws {
         for location in ["https://evil.test/login", "http://p42-buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate",
                          "https://user:pass@buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate",
@@ -146,6 +159,37 @@ final class AuthenticationTests: XCTestCase {
             XCTAssertTrue(requests.allSatisfy { $0.httpBody == requests[0].httpBody })
             let delays = await sleeps.values; XCTAssertEqual(delays, [10, 20])
         }
+    }
+
+    func testAutomaticRecoverySurvivesMoreThanThreeTemporaryReplies() async throws {
+        let transport = FixtureAuthenticationTransport(Array(repeating: .http(404, Data("<html>temporary</html>".utf8), [:]), count: 5) + [.http(200, try success(), responseHeaders)])
+        let sleeps = FixtureSleeps()
+        let result = try await AppleAuthentication(transport: transport, signer: FixtureSigner(), persistence: FixtureAccountStore(), automaticRecovery: true,
+            sleep: { await sleeps.record($0) }).login(email: "fixture@example.test", password: "secret", identity: identity, endpoint: endpoint)
+        guard case .authenticated = result else { return XCTFail("Recovery failed") }
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 6)
+        XCTAssertTrue(requests.allSatisfy { $0.httpBody == requests.first?.httpBody })
+        let delays = await sleeps.values
+        XCTAssertEqual(delays, [2, 4, 8, 15, 15])
+    }
+    func testAutomaticRecoveryStopsAfterTwelveAttemptsAndHonorsRateLimit() async throws {
+        let transport = FixtureAuthenticationTransport(Array(repeating: .http(503, Data(), [:]), count: 12))
+        do {
+            _ = try await AppleAuthentication(transport: transport, signer: FixtureSigner(), persistence: FixtureAccountStore(), automaticRecovery: true, sleep: { _ in })
+                .login(email: "fixture@example.test", password: "secret", identity: identity, endpoint: endpoint)
+            XCTFail("Unlimited recovery")
+        } catch { XCTAssertEqual(error as? AuthenticationError, .http(503)) }
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 12)
+        let rate = FixtureAuthenticationTransport([.http(429, Data(), ["Retry-After": "300"])])
+        do {
+            _ = try await AppleAuthentication(transport: rate, signer: FixtureSigner(), persistence: FixtureAccountStore(), automaticRecovery: true, sleep: { _ in })
+                .login(email: "fixture@example.test", password: "secret", identity: identity, endpoint: endpoint)
+            XCTFail("Ignored Apple retry deadline")
+        } catch { XCTAssertEqual(error as? AuthenticationError, .retryLater) }
+        let rateRequests = await rate.requests
+        XCTAssertEqual(rateRequests.count, 1)
     }
 
     func testAppleCredentialErrorOn403IsNotTreatedAsTransientHTML() async throws {

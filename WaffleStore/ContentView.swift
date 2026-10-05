@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showSearchView: Bool = false
     @State private var showHistoryView: Bool = false
     @State private var showFavouritesView: Bool = false
+    @State private var showDownloadedView = false
     
     @EnvironmentObject var appData: AppData
     @StateObject private var localizationManager = LocalizationManager.shared
@@ -35,7 +36,7 @@ struct ContentView: View {
                     }
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            AppMenu(showHistoryView: $showHistoryView, showFavouritesView: $showFavouritesView)
+                            AppMenu(showHistoryView: $showHistoryView, showFavouritesView: $showFavouritesView, showDownloadedView: $showDownloadedView)
                         }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
@@ -63,7 +64,7 @@ struct ContentView: View {
                     .navigationTitle("WaffleStore")
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            AppMenu(showHistoryView: $showHistoryView, showFavouritesView: $showFavouritesView)
+                            AppMenu(showHistoryView: $showHistoryView, showFavouritesView: $showFavouritesView, showDownloadedView: $showDownloadedView)
                         }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
@@ -92,7 +93,9 @@ struct ContentView: View {
         .sheet(isPresented: $showFavouritesView) {
             FavouritesView()
         }
-        .onAppear { appData.restoreStoreAccount() }
+        .sheet(isPresented: $showDownloadedView) { DownloadedAppsView() }
+        .sheet(isPresented: $appData.showStoreVersions) { StoreVersionsView() }
+        .onAppear { appData.restoreStoreAccount(); appData.restoreDownloadedIPA() }
     }
     
     private var LogsSection: some View {
@@ -120,7 +123,7 @@ struct ContentView: View {
     
     private var LoginSection: some View {
         Group {
-            Section(header: HeaderLabel(text: "Login".localized, icon: "icloud"), footer: Text("")) {
+            Section(header: HeaderLabel(text: "Login".localized, icon: "icloud"), footer: Text("Temporary Apple failures are retried automatically for up to two minutes per request. You can cancel. Apple decides whether to request a new 2FA code.")) {
                 VStack {
                     TextField("Apple ID".localized, text: $appData.appleId)
                         .modifier(TextFieldBackground())
@@ -160,6 +163,7 @@ struct ContentView: View {
             if appData.isAuthenticating {
                 Section {
                     ProgressView(appData.applicationStatus)
+                    Text(appData.authenticationRecovery).font(.caption).foregroundStyle(.secondary)
                     Button("Cancel sign-in") { appData.cancelAppleLogin() }
                 }
             }
@@ -178,13 +182,9 @@ struct ContentView: View {
     }
     
     private var InputAppSection: some View {
-        Section(header: HeaderLabel(text: "Downgrade App".localized, icon: "arrow.down.app"), footer: Text("To downgrade an app, it must have been purchased on your account at some point in the past (when the app has a cloud icon next to it). It must also not be installed on your device currently, but you can offload it.".localized)) {
+        Section(header: HeaderLabel(text: "Downgrade App".localized, icon: "arrow.down.app"), footer: Text("Download the latest or a specific App Store version and export its IPA. Installation depends on iOS and the receiving app.")) {
             VStack(spacing: 12) {
-                if !appData.storeDownloadsAvailable {
-                    Text("This development build validates login and 2FA. Versions, purchase and download are pending migration.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                TextField("App Store Link".localized, text: $appData.appLink)
+                TextField("App Store link, ID or bundle ID", text: $appData.appLink)
                     .modifier(TextFieldBackground())
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -215,9 +215,11 @@ struct AppMenu: View {
     @EnvironmentObject var appData: AppData
     @Binding var showHistoryView: Bool
     @Binding var showFavouritesView: Bool
+    @Binding var showDownloadedView: Bool
     
     var body: some View {
         Menu {
+            Button("Downloaded apps", systemImage: "square.and.arrow.down") { showDownloadedView = true }
             Button(action: {
                 showFavouritesView.toggle()
             }) {
@@ -233,9 +235,7 @@ struct AppMenu: View {
             .disabled(!appData.isAuthenticated || appData.isAuthenticating)
             
             Button(action: {
-                let tempDir = FileManager.default.temporaryDirectory
-                let tempIPAURL = tempDir.appendingPathComponent("app.ipa")
-                presentShareSheet(with: tempIPAURL)
+                if let url = appData.downloadedIPAURL { presentShareSheet(with: url) }
             }) {
                 Label("Export IPA".localized, systemImage: "arrow.up.doc")
             }
@@ -249,7 +249,7 @@ struct AppMenu: View {
             }) {
                 ButtonLabel(text: "Log Out".localized, icon: "arrow.right")
             }
-            .disabled(!appData.isAuthenticated || appData.isAuthenticating)
+            .disabled(!appData.isAuthenticated || appData.isAuthenticating || appData.isDowngrading || appData.showStoreVersions)
         } label: {
             Image(systemName: "line.horizontal.3")
         }

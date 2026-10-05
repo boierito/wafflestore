@@ -14,14 +14,15 @@ extension AppData {
         let challengeCookies = hasSent2FACode ? pendingAuthenticationCookies : []
         isAuthenticating = true
         authenticationError = ""
-        authenticationDiagnostic = ["WaffleStore authentication probe v2",
+        authenticationRecovery = ""
+        authenticationDiagnostic = ["WaffleStore authentication probe v6",
             "iOS=\(UIDevice.current.systemVersion)",
             "app-build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "unknown")",
             "password-persistence=false", "signer=tci-no-jit"].joined(separator: "\n")
         authenticationTask = Task {
             defer { isAuthenticating = false; authenticationTask = nil }
             let sapTransport = AppleSAPTransport()
-            let loginTransport = AppleAuthenticationTransport(cookies: challengeCookies)
+            let loginTransport = AppleAuthenticationTransport(cookies: challengeCookies, isolatedConnections: true)
             defer { sapTransport.close(); loginTransport.close() }
             var sap: SAPSession?
             do {
@@ -37,7 +38,15 @@ extension AppData {
                 try await signer.initialize(configuration: configuration, identity: identity)
                 try Task.checkCancellation()
                 let authentication = AppleAuthentication(transport: loginTransport, signer: signer,
-                    persistence: KeychainStoreAccount())
+                    persistence: KeychainStoreAccount(), diagnostic: { event in
+                        await MainActor.run {
+                            if event.hasPrefix("authentication-recovery-attempt=") {
+                                self.authenticationRecovery = "Automatic attempt " + event.replacingOccurrences(of: "authentication-recovery-attempt=", with: "")
+                            }
+                            self.authenticationDiagnostic += "\n\(event)"
+                            print("Apple authentication diagnostic: \(event)")
+                        }
+                    }, automaticRecovery: true)
                 let outcome = try await authentication.login(email: email, password: secret, code: verification,
                     identity: identity, endpoint: configuration.authenticationURL) { stage in
                         await MainActor.run { self.setAuthenticationStage(stage) }
@@ -51,6 +60,7 @@ extension AppData {
                     code = ""
                     applicationStatus = AuthenticationStage.twoFactor.rawValue
                 case .authenticated(let account):
+                    authenticationDiagnostic += "\ntwo-factor=\(verification.isEmpty ? "not-requested-in-this-login" : "submitted")"
                     applyStoreAccount(account, restored: false)
                 }
             } catch let error where error is CancellationError || Task.isCancelled {
@@ -101,11 +111,12 @@ extension AppData {
     }
 
     func logoutStoreAccount() {
-        guard !isAuthenticating else { return }
+        guard !isAuthenticating, storeTask == nil, !showStoreVersions else { return }
         do {
+            try KeychainKBSync().clear()
             try KeychainStoreAccount().clear()
             try LegacyCredentials.remove()
-            ipaTool?.storeClient.close()
+            ipaTool?.close()
             ipaTool = nil
             isAuthenticated = false
             hasSent2FACode = false
@@ -133,7 +144,7 @@ extension AppData {
         pendingAuthenticationCookies = []
         ipaTool = IPATool(account: account)
         isAuthenticated = true
-        applicationStatus = restored ? "Saved session loaded; Apple validity not checked." : "Signed in. Store download migration pending."
+        applicationStatus = restored ? "Saved session loaded; Apple validity not checked." : "Signed in. Choose an app/version to download."
         applicationIcon = "checkmark.circle.fill"
         applicationIconColor = .primary
         print("Apple authentication: \(restored ? "saved session loaded" : "DSID/token/storefront received and saved in Keychain") [values withheld]")

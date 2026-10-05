@@ -1,16 +1,37 @@
 # WaffleStore
 
-## Experimental revival — 2.3.0-dev.2
+## Experimental revival — 2.3.0-dev.6
 
-This fork implements a no-JIT SAP guest and connects signed Apple login/2FA to
-a Keychain session. The user reported SAP setup and signature generation on an
-iPhone running iOS 27.0.1, signed with ksign and a certificate without JIT.
-**Real Apple login acceptance still needs device validation. Versions, purchase,
-kbsync and download are pending; downgrade is disabled in this development build.**
-Passwords/2FA codes are not persisted. Legacy account/key files are discarded;
-a new login is required. See [IMPLEMENTATION.md](IMPLEMENTATION.md),
-[TESTING.md](TESTING.md), [changed files](CHANGED_FILES.md), and
-[license notices](THIRD_PARTY_NOTICES.md).
+The user confirmed signed SAP login, 2FA and session restoration on iPhone
+running iOS 27.0.1, signed with ksign/certificate without JIT (build 23002).
+Dev.3 (23003) adds interpreted kbsync, dynamic Store endpoints, version selection,
+free-license acquisition when required, validated IPA download and export to
+Files/Share Sheet. **Download still needs real-device Apple validation.**
+Dev.4 (23004) fixes premature logout after ent/download rejection, tries the
+validated pod fallback, and reports sanitized HTTP/Apple failure diagnostics.
+Authentication retries use separate URLSessions with the same ephemeral cookie
+jar. Apple may sign in without requesting 2FA again; no code is fabricated.
+Device confirmation of the versions recovery is pending.
+
+Dev.5 (23005) corrects the ent serial identity bytes, aligns endpoint User-Agents
+with ipatool, and explicitly applies restored cookies to their matching URLs.
+Probe v5 reports cookie counts and redirect Location presence without values.
+Versions in 23004 still failed with ent HTTP 401 and pod sign-in-required 2042.
+These changes require another physical-device check.
+
+Dev.6 (23006) adds bounded automatic login recovery, visible version labels read
+from IPA ranges, a stable download review sheet, and Downloaded apps with the
+original loopback/Safari OTA installation request. Installation is experimental
+and remains subject to iOS approval; serving an IPA does not prove installation.
+The user confirmed versions and IPA export in 23005 after fresh sign-in.
+
+Choose an app link/ID/bundle ID → Choose version / download IPA → selected
+externalVersionId → verified IPA version → Export IPA. Installing or downgrading
+a protected App Store IPA is a separate capability and is not claimed here.
+
+Passwords/2FA codes are not persisted; session and accepted kbsync use Keychain.
+See [IMPLEMENTATION.md](IMPLEMENTATION.md), [TESTING.md](TESTING.md),
+[changed files](CHANGED_FILES.md), and [license notices](THIRD_PARTY_NOTICES.md).
 
 The upstream instructions below are preserved as historical documentation and
 are not a claim that their legacy login/install flow works in this branch.
