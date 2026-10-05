@@ -40,6 +40,13 @@ final class AppData: ObservableObject {
     var authenticationTask: Task<Void, Never>?
     var didRestoreStoreAccount = false
     var pendingAuthenticationCookies: [StoreCookie] = []
+    @Published var collectSignInEvidence = false
+    @Published var freshSAPForInvestigation = false
+    @Published var signInEvidence = ""
+    var signInTrace = AuthenticationTrace()
+    var signInTrials = 0
+    var signInPreparations = 0
+    var signInEndpointAliases: [String: Int] = [:]
     var preparedAppleLogin: PreparedAppleLogin?
     var loginPreparationExpiry: Task<Void, Never>?
     @Published var showStoreVersions = false

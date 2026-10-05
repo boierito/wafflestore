@@ -164,7 +164,9 @@ public struct AppleAuthentication {
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.setValue(SAPProtocol.userAgent, forHTTPHeaderField: "User-Agent")
             request.setValue("close", forHTTPHeaderField: "Connection")
+            let signStart = ProcessInfo.processInfo.systemUptime
             let signature = try await signer.actionSignature(body: body)
+            let signMS = min(10_000_000, max(0, Int((ProcessInfo.processInfo.systemUptime - signStart) * 1000)))
             guard !signature.isEmpty else { throw SAPError.emptySignature }
             request.setValue(signature, forHTTPHeaderField: "X-Apple-ActionSignature")
             try Task.checkCancellation()
@@ -174,10 +176,24 @@ public struct AppleAuthentication {
                 guard deadline > now() else { throw AuthenticationError.retryLater }
                 request.timeoutInterval = max(1, min(30, deadline.timeIntervalSince(now())))
             }
+            let host = endpoint.host?.lowercased() ?? ""
+            let pod = host.hasSuffix("-buy.itunes.apple.com")
+            let native = endpoint.path.hasPrefix("/auth/v1/native")
+            let route = (native ? "native-" : "legacy-") + (pod ? "pod" : "bag")
+            let profile = request.httpMethod == "POST" && request.httpBody == body &&
+                request.value(forHTTPHeaderField: "User-Agent") == SAPProtocol.userAgent &&
+                request.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded"
+                ? "signed-POST-plist-reference-UA" : "unexpected-withheld"
+            await diagnostic("request-profile=\(profile); route=\(route); signer-ms=\(signMS); signature-bytes=\(signature.utf8.count); signature-valid-base64=\(Data(base64Encoded: signature) != nil)")
             await progress(.authenticating)
+            let transferStart = ProcessInfo.processInfo.systemUptime
             do {
                 await diagnostic(await transport.cookieDiagnostic(for: endpoint))
                 let (data, response) = try await transport.send(request)
+                let transferMS = min(10_000_000, max(0, Int((ProcessInfo.processInfo.systemUptime - transferStart) * 1000)))
+                await diagnostic("transfer-ms=\(transferMS)")
+                await diagnostic(await transport.transferDiagnostic())
+                await diagnostic(ResponseDiagnostic.authenticationHeaders(response))
                 await diagnostic(ResponseDiagnostic.response(data, status: response.statusCode, scope: "authentication", attempt: attempt, secrets: secrets))
                 guard data.count <= SAPProtocol.maximumBodySize else { throw SAPError.oversizedResponse }
                 let result = try? ApplePlist.dictionary(data)

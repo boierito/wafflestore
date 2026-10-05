@@ -6,9 +6,11 @@ import FoundationNetworking
 public protocol AuthenticationTransport {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
     func cookies() async -> [StoreCookie]
+    func transferDiagnostic() async -> String
     func cookieDiagnostic(for url: URL) async -> String
 }
 public extension AuthenticationTransport {
+    func transferDiagnostic() async -> String { "connection-metrics=unavailable" }
     func cookieDiagnostic(for url: URL) async -> String { "cookie-transport=fixture-or-unspecified" }
 }
 
@@ -28,6 +30,8 @@ public final class AppleAuthenticationTransport: NSObject, AuthenticationTranspo
     private let lock = NSLock()
     private var isolatedSessions: [UUID: URLSession] = [:]
     private var closed = false
+    private var connectionMetrics: [ObjectIdentifier: String] = [:]
+    private var lastTransfer = "connection-metrics=unavailable"
     private lazy var session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
 
     public convenience init(cookies: [StoreCookie] = [], isolatedConnections: Bool = false) {
@@ -86,6 +90,23 @@ public final class AppleAuthenticationTransport: NSObject, AuthenticationTranspo
         }
         return (data, response)
     }
+    public func transferDiagnostic() async -> String { transferSnapshot() }
+    private func transferSnapshot() -> String {
+        lock.lock(); defer { lock.unlock() }
+        return lastTransfer
+    }
+    #if !canImport(FoundationNetworking)
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        // Only isolated authentication sessions are attributable to one request.
+        // No remote/local addresses, TLS secrets, URLs or headers are retained.
+        lock.lock(); defer { lock.unlock() }
+        guard isolatedSessions.values.contains(where: { $0 === session }), let transaction = metrics.transactionMetrics.last else { return }
+        let raw = transaction.networkProtocolName ?? ""
+        let name = ["http/1.1", "h2", "h3"].contains(raw) ? raw : "other-withheld"
+        let duration = min(10_000_000, max(0, Int(metrics.taskInterval.duration * 1000)))
+        connectionMetrics[ObjectIdentifier(session)] = "connection-metrics=available; network-protocol=\(name); connection-reused=\(transaction.isReusedConnection); task-ms=\(duration)"
+    }
+    #endif
     public func cookies() async -> [StoreCookie] {
         (configuration.httpCookieStorage?.cookies ?? []).map(StoreCookie.init).filter { $0.cookie() != nil }
     }
@@ -100,18 +121,22 @@ public final class AppleAuthenticationTransport: NSObject, AuthenticationTranspo
     private func connection(_ id: UUID) throws -> URLSession {
         lock.lock(); defer { lock.unlock() }
         guard !closed else { throw CancellationError() }
+        lastTransfer = "connection-metrics=unavailable"
         guard isolatedConnections else { return session }
         let current = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         isolatedSessions[id] = current
         return current
     }
     private func releaseConnection(_ id: UUID, _ current: URLSession) {
-        lock.lock(); isolatedSessions.removeValue(forKey: id); lock.unlock()
+        lock.lock()
+        lastTransfer = connectionMetrics.removeValue(forKey: ObjectIdentifier(current)) ?? "connection-metrics=unavailable"
+        isolatedSessions.removeValue(forKey: id)
+        lock.unlock()
         current.finishTasksAndInvalidate()
     }
     public func close() {
         lock.lock(); closed = true
-        let active = Array(isolatedSessions.values); isolatedSessions.removeAll(); lock.unlock()
+        let active = Array(isolatedSessions.values); isolatedSessions.removeAll(); connectionMetrics.removeAll(); lock.unlock()
         active.forEach { $0.invalidateAndCancel() }
         if !isolatedConnections { session.invalidateAndCancel() }
     }

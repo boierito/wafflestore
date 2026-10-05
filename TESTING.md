@@ -62,3 +62,11 @@ this checks generator format only.
    manual attempts; verify wrong/expired code still gets an Apple error.
 8. Verify server Close/timeouts stop serving without deleting the original IPA.
    Repeat with a previously licensed free app on iOS 26/27 as available.
+
+## Intermittent sign-in investigation
+
+Build 23009 is an optional investigation build. Follow
+[the controlled capture procedure](docs/AUTHENTICATION_INVESTIGATION.md).
+Trace privacy/bounds tests are automated; real-account comparisons, connection
+metrics availability and diagnostic controls still need physical-device testing.
+A Base64-format check is not cryptographic verification or proof of Apple acceptance.

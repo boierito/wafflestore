@@ -21,6 +21,16 @@ public enum ResponseDiagnostic {
         // scope comes from an internal switch, not a URL or Apple string.
         return "scope=\(scope); attempt=\(attempt); HTTP=\(status); body=\(format); apple-failure=\(failure)"
     }
+    public static func authenticationHeaders(_ response: HTTPURLResponse) -> String {
+        let raw = response.value(forHTTPHeaderField: "Content-Type")?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+        let type: String
+        if raw.isEmpty { type = "absent" }
+        else if ["text/html", "application/xhtml+xml"].contains(raw) { type = "html" }
+        else if ["application/xml", "text/xml", "application/x-apple-plist", "application/x-plist", "application/plist"].contains(raw) { type = "plist" }
+        else if raw == "application/json" { type = "json" }
+        else { type = "other-withheld" }
+        return "response-content=\(type); location-present=\(response.value(forHTTPHeaderField: "Location") != nil)"
+    }
     public static func category(_ error: Error) -> String {
         if let error = error as? StoreError {
             switch error {

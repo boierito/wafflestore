@@ -18,6 +18,7 @@ Relative to upstream main d508e53.
 - `MapleSyrup/NativeSAP/packageipa/zip_headers.go`
 - `MapleSyrup/SAPKit/Package.swift`
 - `MapleSyrup/SAPKit/Sources/MapleSAP/AppleAuthentication.swift`
+- `MapleSyrup/SAPKit/Sources/MapleSAP/AuthenticationTrace.swift`
 - `MapleSyrup/SAPKit/Sources/MapleSAP/AuthenticationTransport.swift`
 - `MapleSyrup/SAPKit/Sources/MapleSAP/KeychainAccount.swift`
 - `MapleSyrup/SAPKit/Sources/MapleSAP/KeychainIdentity.swift`
@@ -32,6 +33,7 @@ Relative to upstream main d508e53.
 - `MapleSyrup/SAPKit/Sources/MapleSAP/StoreSession.swift`
 - `MapleSyrup/SAPKit/Sources/MapleSAP/Storefront.swift`
 - `MapleSyrup/SAPKit/Tests/MapleSAPTests/AuthenticationTests.swift`
+- `MapleSyrup/SAPKit/Tests/MapleSAPTests/AuthenticationTraceTests.swift`
 - `MapleSyrup/SAPKit/Tests/MapleSAPTests/AuthenticationTransportTests.swift`
 - `MapleSyrup/SAPKit/Tests/MapleSAPTests/MemoryCapability.swift`
 - `MapleSyrup/SAPKit/Tests/MapleSAPTests/OTARangeTests.swift`
@@ -63,6 +65,7 @@ Relative to upstream main d508e53.
 - `WaffleStore/MapleSyrup/NativeSAPGuest.swift`
 - `WaffleStore/MapleSyrup/NativeStoreGuest.swift`
 - `WaffleStore/Resources/ThirdPartyNotices.txt`
+- `docs/AUTHENTICATION_INVESTIGATION.md`
 - `docs/BACKEND_AUDIT.md`
 - `docs/IPATOOL_AUDIT.md`
 - `scripts/build-sap-native.sh`

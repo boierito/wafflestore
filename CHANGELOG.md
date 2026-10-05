@@ -87,3 +87,11 @@ No es una release estable ni una afirmación de recuperación de WaffleStore.
   success or expiry. Apply one login recovery deadline across signing/redirects.
 - Add deletion-boundary and pod/deadline regression tests. Device validation of
   the new flows and actual login latency remains pending.
+
+## Authentication investigation / build 23009
+
+- Add opt-in, allowlisted, memory-only sign-in reports and public URLSession
+  request metrics; no credentials/raw traffic exported.
+- Add a single-variable warm/fresh SAP mode without automatic account requests.
+- Keep the cleaned upstream branch unchanged; document manual comparison and
+  interpretation limits in docs/AUTHENTICATION_INVESTIGATION.md.

@@ -20,6 +20,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Sign-in troubleshooting") {
+                    Toggle("Collect sanitized sign-in report", isOn: $appData.collectSignInEvidence)
+                        .disabled(appData.isAuthenticating)
+                        .onChange(of: appData.collectSignInEvidence) { enabled in
+                            if !enabled { appData.clearSignInEvidence(); appData.freshSAPForInvestigation = false; appData.discardPreparedSignIn() }
+                        }
+                    if appData.collectSignInEvidence {
+                        Toggle("Fresh session for each manual sign-in", isOn: $appData.freshSAPForInvestigation)
+                            .disabled(appData.isAuthenticating)
+                            .onChange(of: appData.freshSAPForInvestigation) { _ in appData.discardPreparedSignIn() }
+                        Button("Copy sanitized report") { UIPasteboard.general.string = appData.signInEvidence }
+                            .disabled(appData.signInEvidence.isEmpty || appData.isAuthenticating)
+                        Button("Clear report") { appData.clearSignInEvidence() }
+                            .disabled(appData.isAuthenticating)
+                    }
+                } footer: {
+                    Text("Optional, memory-only status codes, counts and timings. No account, password, 2FA, cookie or signature values are collected. Fresh session resets Bag/SAP/pod/cookies (keeping 2FA challenge cookies); nothing starts automatically. Disable to clear the report. App restart resets these options.")
+                }
                 Section(header: HeaderLabel(text: "About".localized, icon: "info.circle")) {
                     VStack(alignment: .leading, spacing: 10) {
                         AppInfoCell()
