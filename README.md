@@ -1,4 +1,19 @@
 # WaffleStore
+
+## Experimental revival — 2.3.0-dev.2
+
+This fork implements a no-JIT SAP guest and connects signed Apple login/2FA to
+a Keychain session. The user reported SAP setup and signature generation on an
+iPhone running iOS 27.0.1, signed with ksign and a certificate without JIT.
+**Real Apple login acceptance still needs device validation. Versions, purchase,
+kbsync and download are pending; downgrade is disabled in this development build.**
+Passwords/2FA codes are not persisted. Legacy account/key files are discarded;
+a new login is required. See [IMPLEMENTATION.md](IMPLEMENTATION.md),
+[TESTING.md](TESTING.md), [changed files](CHANGED_FILES.md), and
+[license notices](THIRD_PARTY_NOTICES.md).
+
+The upstream instructions below are preserved as historical documentation and
+are not a claim that their legacy login/install flow works in this branch.
 A **jailed** app store app downgrader, based off of [MuffinStoreJailed](https://github.com/mineek/MuffinStoreJailed-Public) and [PancakeStore](https://github.com/jailbreakdotparty/PancakeStore). Supports iOS 16.4+ and does not use any exploits.
 
 [PancakeStore (by jailbreakdotparty)](https://github.com/jailbreakdotparty/PancakeStore/releases/latest) • [MuffinStoreJailed (by mineek)](https://github.com/mineek/MuffinStoreJailed-Public)

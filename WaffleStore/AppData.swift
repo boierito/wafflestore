@@ -9,6 +9,7 @@
 
 import SwiftUI
 import Combine
+import MapleSAP
 
 @MainActor
 final class AppData: ObservableObject {
@@ -33,6 +34,14 @@ final class AppData: ObservableObject {
     @Published var code: String = ""
     
     @Published var isAuthenticated: Bool = false
+    @Published var isAuthenticating: Bool = false
+    @Published var authenticationError: String = ""
+    @Published var authenticationDiagnostic: String = "No authentication attempted."
+    var authenticationTask: Task<Void, Never>?
+    var didRestoreStoreAccount = false
+    var pendingAuthenticationCookies: [StoreCookie] = []
+    // Enable only after the separate modern Store/download migration is verified.
+    let storeDownloadsAvailable = false
     @Published var isDowngrading: Bool = false
     
     @Published var appLink: String = ""
@@ -47,4 +56,3 @@ final class AppData: ObservableObject {
     
     @Published var favourites: [FavouriteApp] = FavouritesStore.load()
 }
-
